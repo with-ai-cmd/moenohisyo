@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LINE秘書ダッシュボード</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f5f5f0;
+    --surface: #ffffff;
+    --surface2: #f9f9f6;
+    --border: #e5e4dc;
+    --text: #1a1a18;
+    --text2: #6b6b64;
+    --text3: #9b9b92;
+    --accent: #3b6b3b;
+    --accent-bg: #e8f2e8;
+    --danger: #b53a2a;
+    --danger-bg: #fdf0ee;
+    --warn: #9a6500;
+    --warn-bg: #fef9e6;
+    --blue: #1a5a9a;
+    --blue-bg: #e6f0fa;
+    --radius: 10px;
+  }
+  body { font-family: 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.6; }
+
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; gap: 16px; height: 56px; }
+  .logo { font-size: 16px; font-weight: 600; color: var(--accent); }
+  .header-stats { display: flex; gap: 16px; margin-left: auto; }
+  .stat-pill { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+  .stat-pending { background: var(--warn-bg); color: var(--warn); }
+  .stat-total { background: var(--bg); color: var(--text2); }
+
+  .layout { display: grid; grid-template-columns: 340px 1fr; height: calc(100vh - 56px); }
+
+  /* サイドパネル */
+  .sidebar { background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  .sidebar-header { padding: 16px; border-bottom: 1px solid var(--border); }
+  .filter-tabs { display: flex; gap: 4px; background: var(--bg); border-radius: 8px; padding: 3px; }
+  .filter-tab { flex: 1; text-align: center; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 12px; color: var(--text2); border: none; background: transparent; transition: all .15s; }
+  .filter-tab.active { background: var(--surface); color: var(--text); font-weight: 500; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+  .search-box { margin-top: 10px; position: relative; }
+  .search-box input { width: 100%; padding: 7px 12px 7px 32px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; background: var(--bg); color: var(--text); outline: none; }
+  .search-box input:focus { border-color: var(--accent); }
+  .search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text3); font-size: 14px; }
+
+  .message-list { flex: 1; overflow-y: auto; }
+  .message-item { padding: 14px 16px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .1s; }
+  .message-item:hover { background: var(--surface2); }
+  .message-item.selected { background: var(--accent-bg); border-left: 3px solid var(--accent); }
+  .message-item.replied { opacity: .55; }
+  .msg-top { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .msg-badge { padding: 2px 7px; border-radius: 10px; font-size: 11px; font-weight: 500; }
+  .badge-attendance { background: var(--accent-bg); color: var(--accent); }
+  .badge-schedule { background: var(--blue-bg); color: var(--blue); }
+  .badge-inquiry { background: var(--warn-bg); color: var(--warn); }
+  .badge-other { background: var(--bg); color: var(--text2); }
+  .badge-replied { background: #e8e8e8; color: var(--text3); }
+  .badge-high { border: 1px solid var(--danger); color: var(--danger); background: var(--danger-bg); }
+  .msg-time { margin-left: auto; font-size: 11px; color: var(--text3); }
+  .msg-summary { font-size: 13px; font-weight: 500; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .msg-preview { font-size: 12px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .msg-sender { display: flex; align-items: center; gap: 5px; margin-bottom: 3px; }
+  .sender-avatar { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; background: var(--border); }
+  .sender-avatar-placeholder { width: 20px; height: 20px; border-radius: 50%; background: var(--border); display: inline-flex; align-items: center; justify-content: center; font-size: 10px; color: var(--text3); flex-shrink: 0; }
+  .sender-name { font-size: 12px; font-weight: 500; color: var(--text2); }
+  .source-badge { font-size: 10px; padding: 1px 5px; border-radius: 8px; background: var(--bg); color: var(--text3); border: 1px solid var(--border); }
+
+  /* メイン詳細パネル */
+  .main { background: var(--bg); overflow-y: auto; display: flex; flex-direction: column; }
+  .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text3); gap: 8px; }
+  .empty-icon { font-size: 40px; }
+
+  .detail { padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+  .detail-header { display: flex; align-items: center; gap: 10px; }
+  .detail-title { font-size: 16px; font-weight: 600; flex: 1; }
+  .detail-time { font-size: 12px; color: var(--text3); }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+  .card-label { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+  .original-text { font-size: 14px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
+
+  .attendance-buttons { display: flex; gap: 8px; margin-top: 10px; }
+  .btn-attend { padding: 7px 16px; border-radius: 8px; border: 1.5px solid var(--accent); color: var(--accent); background: transparent; cursor: pointer; font-size: 13px; font-weight: 500; transition: all .15s; }
+  .btn-attend:hover, .btn-attend.active { background: var(--accent); color: #fff; }
+  .btn-absent { border-color: var(--danger); color: var(--danger); }
+  .btn-absent:hover, .btn-absent.active { background: var(--danger); color: #fff; }
+
+  .schedule-dates { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .date-chip { padding: 4px 10px; border-radius: 20px; font-size: 12px; border: 1px solid var(--border); background: var(--bg); color: var(--text2); }
+  .date-chip.free { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
+  .date-chip.busy { border-color: var(--danger); color: var(--danger); background: var(--danger-bg); }
+
+  .reply-textarea { width: 100%; min-height: 120px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical; outline: none; color: var(--text); line-height: 1.7; }
+  .reply-textarea:focus { border-color: var(--accent); }
+  .reply-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .btn-send { padding: 10px 24px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity .15s; }
+  .btn-send:hover { opacity: .85; }
+  .btn-send:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-secondary { padding: 10px 16px; background: transparent; color: var(--text2); border: 1px solid var(--border); border-radius: 8px; font-size: 13px; cursor: pointer; transition: all .15s; }
+  .btn-secondary:hover { background: var(--bg); }
+
+  .calendar-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .cal-field { display: flex; flex-direction: column; gap: 4px; }
+  .cal-field label { font-size: 11px; color: var(--text2); }
+  .cal-field input, .cal-field select { padding: 7px 10px; border: 1px solid var(--border); border-radius: 7px; font-size: 13px; font-family: inherit; outline: none; color: var(--text); background: var(--surface); }
+  .cal-field input:focus, .cal-field select:focus { border-color: var(--accent); }
+  .cal-field.full { grid-column: 1 / -1; }
+  .btn-cal { grid-column: 1 / -1; padding: 9px; background: var(--blue); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: opacity .15s; }
+  .btn-cal:hover { opacity: .85; }
+
+  .note-input { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; outline: none; color: var(--text); }
+  .note-input:focus { border-color: var(--accent); }
+
+  .toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; background: var(--text); color: #fff; border-radius: 10px; font-size: 13px; opacity: 0; pointer-events: none; transition: opacity .3s; z-index: 100; }
+  .toast.show { opacity: 1; }
+  .toast.error { background: var(--danger); }
+
+  .loading { text-align: center; padding: 20px; color: var(--text3); font-size: 13px; }
+  .sent-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; background: var(--accent-bg); color: var(--accent); border-radius: 20px; font-size: 12px; }
+
+  @media (max-width: 768px) {
+    .layout { grid-template-columns: 1fr; }
+    .main { display: none; }
+    .main.active { display: flex; }
+    .sidebar { display: flex; }
+    .sidebar.hidden { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">📋 LINE秘書ダッシュボード</div>
+  <div class="header-stats">
+    <span class="stat-pill stat-pending" id="stat-pending">未返信 0件</span>
+    <span class="stat-pill stat-total" id="stat-total">全 0件</span>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- 左：メッセージ一覧 -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="filter-tabs">
+        <button class="filter-tab active" data-filter="all">すべて</button>
+        <button class="filter-tab" data-filter="pending">未返信</button>
+        <button class="filter-tab" data-filter="attendance">出欠</button>
+        <button class="filter-tab" data-filter="schedule">日程</button>
+      </div>
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="search-input" placeholder="メッセージを検索...">
+      </div>
+    </div>
+    <div class="message-list" id="message-list">
+      <div class="loading">読み込み中...</div>
+    </div>
+  </aside>
+
+  <!-- 右：詳細パネル -->
+  <main class="main" id="main-panel">
+    <div class="empty-state" id="empty-state">
+      <div class="empty-icon">💬</div>
+      <div>メッセージを選択してください</div>
+    </div>
+    <div class="detail" id="detail-panel" style="display:none"></div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let messages = [];
+let selectedId = null;
+let currentFilter = 'all';
+let searchQuery = '';
+
+// --- データ取得 ---
+async function loadMessages() {
+  const res = await fetch('/api/messages?limit=100');
+  messages = await res.json();
+  renderList();
+  loadStats();
+}
+
+async function loadStats() {
+  const res = await fetch('/api/stats');
+  const stats = await res.json();
+  document.getElementById('stat-pending').textContent = `未返信 ${stats.pending}件`;
+  document.getElementById('stat-total').textContent = `全 ${stats.total}件`;
+}
+
+// --- リスト描画 ---
+function renderList() {
+  const list = document.getElementById('message-list');
+  let filtered = messages;
+
+  if (currentFilter === 'pending') filtered = filtered.filter(m => m.status === 'pending');
+  else if (currentFilter === 'attendance') filtered = filtered.filter(m => m.type === 'attendance');
+  else if (currentFilter === 'schedule') filtered = filtered.filter(m => m.type === 'schedule');
+
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    filtered = filtered.filter(m => m.text?.toLowerCase().includes(q) || m.summary?.toLowerCase().includes(q));
+  }
+
+  if (!filtered.length) {
+    list.innerHTML = '<div class="loading">メッセージがありません</div>';
+    return;
+  }
+
+  list.innerHTML = filtered.map(m => {
+    const isSelected = m.id === selectedId;
+    const isReplied = m.status === 'replied';
+    const badge = badgeHtml(m);
+    const time = formatTime(m.timestamp);
+    const avatarHtml = m.pictureUrl
+      ? `<img class="sender-avatar" src="${escHtml(m.pictureUrl)}" alt="">`
+      : `<span class="sender-avatar-placeholder">👤</span>`;
+    const sourceLabel = m.sourceType === 'group' ? 'グループ' : m.sourceType === 'room' ? 'ルーム' : '';
+    return `
+      <div class="message-item ${isSelected ? 'selected' : ''} ${isReplied ? 'replied' : ''}"
+           onclick="selectMessage('${m.id}')">
+        <div class="msg-top">
+          ${badge}
+          ${m.priority === 'high' ? '<span class="msg-badge badge-high">急ぎ</span>' : ''}
+          ${isReplied ? '<span class="msg-badge badge-replied">送信済み</span>' : ''}
+          <span class="msg-time">${time}</span>
+        </div>
+        <div class="msg-sender">
+          ${avatarHtml}
+          <span class="sender-name">${escHtml(m.displayName || m.userId || '')}</span>
+          ${sourceLabel ? `<span class="source-badge">${sourceLabel}</span>` : ''}
+        </div>
+        <div class="msg-summary">${escHtml(m.summary || m.text?.slice(0, 40) || '')}</div>
+        <div class="msg-preview">${escHtml(m.text?.slice(0, 60) || '')}</div>
+      </div>`;
+  }).join('');
+}
+
+function badgeHtml(m) {
+  const map = { attendance: ['badge-attendance', '出欠'], schedule: ['badge-schedule', '日程調整'], inquiry: ['badge-inquiry', '問い合わせ'], other: ['badge-other', 'その他'] };
+  const [cls, label] = map[m.type] || map.other;
+  return `<span class="msg-badge ${cls}">${label}</span>`;
+}
+
+function formatTime(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  const now = new Date();
+  const diff = now - d;
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}分前`;
+  if (diff < 86400000) return `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
+  return `${d.getMonth()+1}/${d.getDate()}`;
+}
+
+// --- 詳細パネル描画 ---
+async function selectMessage(id) {
+  selectedId = id;
+  renderList();
+
+  const msg = messages.find(m => m.id === id);
+  if (!msg) return;
+
+  document.getElementById('empty-state').style.display = 'none';
+  const panel = document.getElementById('detail-panel');
+  panel.style.display = 'flex';
+  panel.innerHTML = buildDetail(msg);
+  panel.scrollTop = 0;
+
+  // カレンダー空き確認（日程調整の場合）
+  if (msg.type === 'schedule' && msg.scheduleDates?.length) {
+    checkCalendarAvailability(msg.scheduleDates);
+  }
+}
+
+function buildDetail(m) {
+  const typeLabel = { attendance: '出欠連絡', schedule: '日程調整', inquiry: '問い合わせ', other: 'その他' }[m.type] || 'その他';
+  const isReplied = m.status === 'replied';
+  const avatarHtml = m.pictureUrl
+    ? `<img class="sender-avatar" style="width:32px;height:32px" src="${escHtml(m.pictureUrl)}" alt="">`
+    : `<span class="sender-avatar-placeholder" style="width:32px;height:32px;font-size:14px">👤</span>`;
+  const sourceLabel = m.sourceType === 'group' ? 'グループ' : m.sourceType === 'room' ? 'ルーム' : '個人';
+
+  return `
+    <div class="detail-header">
+      ${badgeHtml(m)}
+      <div class="detail-title">${escHtml(m.summary || typeLabel)}</div>
+      <div class="detail-time">${new Date(m.timestamp).toLocaleString('ja-JP')}</div>
+    </div>
+
+    <!-- 送信者情報 -->
+    <div class="card" style="display:flex;align-items:center;gap:12px;padding:12px 16px">
+      ${avatarHtml}
+      <div>
+        <div style="font-size:14px;font-weight:500">${escHtml(m.displayName || m.userId || '不明')}</div>
+        <div style="font-size:12px;color:var(--text3);display:flex;align-items:center;gap:6px">
+          ${sourceLabel}
+          <span style="font-family:monospace;background:var(--bg);padding:1px 6px;border-radius:4px;border:1px solid var(--border);cursor:pointer"
+                onclick="copyUserId('${escHtml(m.userId || '')}')">
+            ${escHtml(m.userId || '')}
+          </span>
+          <span style="color:var(--accent);cursor:pointer;font-size:11px" onclick="copyUserId('${escHtml(m.userId || '')}')">コピー</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 元メッセージ -->
+    <div class="card">
+      <div class="card-label">受信メッセージ</div>
+      <div class="original-text">${escHtml(m.text)}</div>
+    </div>
+
+    ${m.type === 'attendance' ? `
+    <!-- 出欠ステータス -->
+    <div class="card">
+      <div class="card-label">出欠ステータス</div>
+      <div style="font-size:13px;color:var(--text2)">AIの判定: <strong>${m.attendanceStatus === 'attending' ? '✅ 参加' : m.attendanceStatus === 'absent' ? '❌ 欠席' : '未判定'}</strong></div>
+      <div class="attendance-buttons">
+        <button class="btn-attend ${m.attendanceStatus === 'attending' ? 'active' : ''}" onclick="setAttendance('attending')">✅ 参加に設定</button>
+        <button class="btn-attend btn-absent ${m.attendanceStatus === 'absent' ? 'active' : ''}" onclick="setAttendance('absent')">❌ 欠席に設定</button>
+      </div>
+    </div>` : ''}
+
+    ${m.type === 'schedule' && m.scheduleDates?.length ? `
+    <!-- 候補日 -->
+    <div class="card">
+      <div class="card-label">候補日（カレンダー照合中...）</div>
+      <div class="schedule-dates" id="schedule-dates">
+        ${m.scheduleDates.map(d => `<span class="date-chip" data-date="${d}">${formatDate(d)}</span>`).join('')}
+      </div>
+    </div>` : ''}
+
+    <!-- 返信文案 -->
+    <div class="card">
+      <div class="card-label">返信文案（編集して送信）</div>
+      ${isReplied ? `<div class="sent-badge">✓ 送信済み</div><div style="margin-top:8px;font-size:13px;color:var(--text2);white-space:pre-wrap">${escHtml(m.repliedText)}</div>` : ''}
+      ${!isReplied ? `
+      <textarea class="reply-textarea" id="reply-text">${escHtml(m.replyDraft || '')}</textarea>
+      <div class="reply-actions">
+        <button class="btn-send" id="btn-send" onclick="sendReply()">📤 LINE で送信</button>
+        <button class="btn-secondary" onclick="saveDraft()">下書き保存</button>
+      </div>` : ''}
+    </div>
+
+    ${m.type === 'schedule' ? `
+    <!-- カレンダー登録 -->
+    <div class="card">
+      <div class="card-label">カレンダーに予定を登録</div>
+      <div class="calendar-form">
+        <div class="cal-field full">
+          <label>予定名</label>
+          <input id="cal-title" type="text" value="${escHtml(m.eventName || m.summary || '')}" placeholder="例：田中様 打ち合わせ">
+        </div>
+        <div class="cal-field">
+          <label>日付</label>
+          <input id="cal-date" type="date" value="${m.scheduleDates?.[0] || ''}">
+        </div>
+        <div class="cal-field">
+          <label>開始時刻</label>
+          <input id="cal-start" type="time" value="11:00">
+        </div>
+        <div class="cal-field">
+          <label>終了時刻</label>
+          <input id="cal-end" type="time" value="12:00">
+        </div>
+        <div class="cal-field full">
+          <label>メモ</label>
+          <input id="cal-desc" type="text" placeholder="（任意）">
+        </div>
+        <button class="btn-cal" onclick="registerCalendar()">📅 カレンダーに登録</button>
+      </div>
+    </div>` : ''}
+
+    <!-- メモ -->
+    <div class="card">
+      <div class="card-label">内部メモ</div>
+      <input class="note-input" id="note-input" type="text" value="${escHtml(m.note || '')}" placeholder="秘書用メモ（LINEには送信されません）" onblur="saveNote()">
+    </div>`;
+}
+
+function formatDate(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00+09:00');
+  const days = ['日', '月', '火', '水', '木', '金', '土'];
+  return `${d.getMonth()+1}月${d.getDate()}日(${days[d.getDay()]})`;
+}
+
+// --- アクション ---
+async function setAttendance(status) {
+  const msg = messages.find(m => m.id === selectedId);
+  if (!msg) return;
+  const res = await fetch(`/api/messages/${selectedId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ attendanceStatus: status }),
+  });
+  const updated = await res.json();
+  Object.assign(msg, updated);
+  selectMessage(selectedId);
+  toast(`出欠を「${status === 'attending' ? '参加' : '欠席'}」に設定しました`);
+}
+
+async function checkCalendarAvailability(dates) {
+  try {
+    const res = await fetch('/api/calendar/check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dates }),
+    });
+    const slots = await res.json();
+    const container = document.getElementById('schedule-dates');
+    if (!container) return;
+    container.innerHTML = slots.map(s => {
+      const cls = s.hasFreeTime ? 'free' : 'busy';
+      const icon = s.hasFreeTime ? '✅' : '❌';
+      return `<span class="date-chip ${cls}" data-date="${s.date}" onclick="document.getElementById('cal-date').value='${s.date}'">${icon} ${formatDate(s.date)}</span>`;
+    }).join('');
+    container.previousElementSibling.textContent = '候補日（クリックで日付を選択）';
+  } catch (e) {
+    console.warn('カレンダー照合失敗:', e.message);
+  }
+}
+
+async function sendReply() {
+  const text = document.getElementById('reply-text')?.value;
+  if (!text?.trim()) { toast('返信文が空です', true); return; }
+
+  const btn = document.getElementById('btn-send');
+  btn.disabled = true;
+  btn.textContent = '送信中...';
+
+  const res = await fetch(`/api/messages/${selectedId}/reply`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  });
+
+  if (res.ok) {
+    const { message: updated } = await res.json();
+    const idx = messages.findIndex(m => m.id === selectedId);
+    if (idx >= 0) messages[idx] = updated;
+    toast('LINEに送信しました ✅');
+    selectMessage(selectedId);
+    loadStats();
+  } else {
+    const err = await res.json();
+    toast(err.error || '送信に失敗しました', true);
+    btn.disabled = false;
+    btn.textContent = '📤 LINE で送信';
+  }
+}
+
+async function saveDraft() {
+  const text = document.getElementById('reply-text')?.value;
+  await fetch(`/api/messages/${selectedId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ replyDraft: text }),
+  });
+  const idx = messages.findIndex(m => m.id === selectedId);
+  if (idx >= 0) messages[idx].replyDraft = text;
+  toast('下書きを保存しました');
+}
+
+async function saveNote() {
+  const note = document.getElementById('note-input')?.value;
+  await fetch(`/api/messages/${selectedId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ note }),
+  });
+}
+
+async function registerCalendar() {
+  const title = document.getElementById('cal-title').value;
+  const date = document.getElementById('cal-date').value;
+  const startTime = document.getElementById('cal-start').value;
+  const endTime = document.getElementById('cal-end').value;
+  const description = document.getElementById('cal-desc').value;
+
+  if (!title || !date) { toast('予定名と日付は必須です', true); return; }
+
+  const res = await fetch('/api/calendar/events', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title, date, startTime, endTime, description }),
+  });
+
+  if (res.ok) {
+    toast('カレンダーに登録しました 📅');
+  } else {
+    const err = await res.json();
+    if (err.error?.includes('認証')) {
+      toast('Google認証が必要です。/auth/google を開いてください', true);
+    } else {
+      toast(err.error || '登録に失敗しました', true);
+    }
+  }
+}
+
+// --- UI ユーティリティ ---
+function toast(msg, isError = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast show ${isError ? 'error' : ''}`;
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+function copyUserId(userId) {
+  navigator.clipboard.writeText(userId).then(() => toast(`userIdをコピーしました: ${userId}`));
+}
+
+function escHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// --- イベント ---
+document.querySelectorAll('.filter-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    currentFilter = btn.dataset.filter;
+    document.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderList();
+  });
+});
+
+document.getElementById('search-input').addEventListener('input', e => {
+  searchQuery = e.target.value;
+  renderList();
+});
+
+// 30秒ごとに自動更新
+loadMessages();
+setInterval(loadMessages, 30000);
+</script>
+</body>
+</html>
