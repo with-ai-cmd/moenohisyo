@@ -18,7 +18,10 @@ export function getAuthUrl() {
   const client = createOAuth2Client();
   return client.generateAuthUrl({
     access_type: 'offline',
-    scope: ['https://www.googleapis.com/auth/calendar'],
+    scope: [
+      'https://www.googleapis.com/auth/calendar',
+      'https://www.googleapis.com/auth/spreadsheets',
+    ],
   });
 }
 

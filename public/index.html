@@ -323,6 +323,10 @@ function buildDetail(m) {
         <button class="btn-attend ${m.attendanceStatus === 'attending' ? 'active' : ''}" onclick="setAttendance('attending')">✅ 参加に設定</button>
         <button class="btn-attend btn-absent ${m.attendanceStatus === 'absent' ? 'active' : ''}" onclick="setAttendance('absent')">❌ 欠席に設定</button>
       </div>
+      <div style="margin-top:10px;">
+        <button class="btn-secondary" onclick="openSheetDialog()" style="width:100%;background:#e8f5e9;border-color:#4caf50;color:#2e7d32;">📊 スプレッドシートに記録</button>
+      </div>
+      ${m.recordedToSheet ? `<div style="margin-top:6px;font-size:12px;color:var(--accent);">✓ スプレッドシートに記録済み</div>` : ''}
     </div>` : ''}
 
     ${m.type === 'schedule' && m.scheduleDates?.length ? `
@@ -536,6 +540,80 @@ document.getElementById('search-input').addEventListener('input', e => {
 // 30秒ごとに自動更新
 loadMessages();
 setInterval(loadMessages, 30000);
+
+// --- スプレッドシート記録ダイアログ ---
+function openSheetDialog() {
+  document.getElementById('sheet-dialog').showModal();
+  document.getElementById('sheet-url').focus();
+}
+
+document.getElementById('sheet-dialog-close').addEventListener('click', () => {
+  document.getElementById('sheet-dialog').close();
+});
+
+document.getElementById('sheet-url').addEventListener('change', async () => {
+  const url = document.getElementById('sheet-url').value.trim();
+  if (!url) return;
+  const sel = document.getElementById('sheet-name-select');
+  sel.innerHTML = '<option>読み込み中...</option>';
+  try {
+    const names = await fetch(`/api/sheets/names?url=${encodeURIComponent(url)}`).then(r => r.json());
+    sel.innerHTML = names.map(n => `<option value="${n}">${n}</option>`).join('');
+  } catch {
+    sel.innerHTML = '<option value="">シート名を手入力してください</option>';
+  }
+});
+
+document.getElementById('sheet-record-btn').addEventListener('click', async () => {
+  const url = document.getElementById('sheet-url').value.trim();
+  const sheetName = document.getElementById('sheet-name-input').value.trim() || document.getElementById('sheet-name-select').value;
+  if (!url || !sheetName) { alert('URLとシート名を入力してください'); return; }
+  if (!currentMsg) return;
+
+  try {
+    document.getElementById('sheet-record-btn').textContent = '記録中...';
+    const res = await fetch(`/api/messages/${currentMsg.id}/record-attendance`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ spreadsheetUrl: url, sheetName }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    document.getElementById('sheet-dialog').close();
+    toast('✅ スプレッドシートに記録しました');
+    currentMsg = data.message;
+    renderDetail(currentMsg);
+  } catch (err) {
+    alert('記録に失敗しました: ' + err.message);
+  } finally {
+    document.getElementById('sheet-record-btn').textContent = '📊 記録する';
+  }
+});
 </script>
+
+<!-- スプレッドシート記録ダイアログ -->
+<dialog id="sheet-dialog" style="border-radius:12px;padding:24px;width:min(480px,90vw);border:1px solid #e5e4dc;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+    <strong style="font-size:15px;">📊 スプレッドシートに記録</strong>
+    <button id="sheet-dialog-close" style="border:none;background:none;font-size:20px;cursor:pointer;color:#999;">×</button>
+  </div>
+  <div style="display:grid;gap:12px;">
+    <label style="font-size:12px;color:#666;">
+      スプレッドシートのURL
+      <input id="sheet-url" type="text" placeholder="https://docs.google.com/spreadsheets/d/..." style="margin-top:4px;width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:14px;">
+    </label>
+    <label style="font-size:12px;color:#666;">
+      シート名（タブ名）
+      <select id="sheet-name-select" style="margin-top:4px;width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:14px;">
+        <option value="">URLを入力するとシート一覧が表示されます</option>
+      </select>
+      <input id="sheet-name-input" type="text" placeholder="または直接入力" style="margin-top:6px;width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:14px;">
+    </label>
+    <div style="font-size:12px;color:#888;background:#f5f5f0;border-radius:8px;padding:10px;">
+      記録される内容：受信日時 / 名前 / メッセージ内容 / 参加・不参加 / イベント名
+    </div>
+    <button id="sheet-record-btn" style="padding:10px;background:#2e7d32;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-weight:600;">📊 記録する</button>
+  </div>
+</dialog>
 </body>
 </html>

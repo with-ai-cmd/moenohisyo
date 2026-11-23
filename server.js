@@ -5,6 +5,7 @@ import { createLineMiddleware, handleWebhook } from './src/webhook.js';
 import { getMessages, getMessage, updateMessage, getStats } from './src/db.js';
 import { sendReply } from './src/line-api.js';
 import { createCalendarEvent, getAvailableSlots, getAuthUrl, saveToken } from './src/calendar.js';
+import { appendAttendance, getSheetNames } from './src/sheets.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -108,6 +109,40 @@ app.post('/api/calendar/check', async (req, res) => {
     const slots = await getAvailableSlots(dates);
     res.json(slots);
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- スプレッドシートのシート名一覧を取得 ---
+app.get('/api/sheets/names', async (req, res) => {
+  const { url } = req.query;
+  if (!url) return res.status(400).json({ error: 'url が必要です' });
+  try {
+    const names = await getSheetNames(url);
+    res.json(names);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- スプレッドシートに出欠を記録 ---
+app.post('/api/messages/:id/record-attendance', async (req, res) => {
+  const msg = getMessage(req.params.id);
+  if (!msg) return res.status(404).json({ error: '見つかりません' });
+
+  const { spreadsheetUrl, sheetName } = req.body;
+  if (!spreadsheetUrl || !sheetName) return res.status(400).json({ error: 'spreadsheetUrl と sheetName は必須です' });
+
+  const now = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+  const status = msg.attendanceStatus === 'attending' ? '参加' : msg.attendanceStatus === 'not_attending' ? '不参加' : '未確定';
+  const row = [now, msg.displayName || msg.userId, msg.text, status, msg.eventName || ''];
+
+  try {
+    await appendAttendance({ spreadsheetUrl, sheetName, row });
+    const updated = updateMessage(req.params.id, { recordedToSheet: true, recordedAt: new Date().toISOString() });
+    res.json({ ok: true, message: updated });
+  } catch (err) {
+    console.error('[Sheets]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
