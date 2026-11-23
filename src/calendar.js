@@ -1,5 +1,5 @@
 import { google } from 'googleapis';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -25,6 +25,7 @@ export function getAuthUrl() {
 export async function saveToken(code) {
   const client = createOAuth2Client();
   const { tokens } = await client.getToken(code);
+  mkdirSync(dirname(TOKEN_PATH), { recursive: true });
   writeFileSync(TOKEN_PATH, JSON.stringify(tokens, null, 2), 'utf8');
   return tokens;
 }
